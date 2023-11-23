@@ -25,7 +25,7 @@ public class Client {
             ExecutorService executorService=Executors.newFixedThreadPool(filePaths.size());
             for(int i=0;i<filePaths.size();i++){
                 path_id.put(filePaths.get(i),i);
-                ConnectServer connectServer=new ConnectServer("localhost",8000,filePaths.get(i),"u",i);
+                ConnectServer connectServer=new ConnectServer("localhost",8000,filePaths.get(i),"u");
                 ConnectServerList.add(connectServer);
                 executorService.execute(connectServer);
             }
@@ -43,7 +43,7 @@ public class Client {
             ExecutorService executorService=Executors.newFixedThreadPool(fileName.size());
             for(int i=0;i<fileName.size();i++){
                 path_id.put(fileName.get(i),i);
-                ConnectServer connectServer=new ConnectServer("localhost",8000,fileName.get(i),"d",i);
+                ConnectServer connectServer=new ConnectServer("localhost",8000,fileName.get(i),"d");
                 ConnectServerList.add(connectServer);
                 executorService.execute(connectServer);
             }
@@ -75,8 +75,8 @@ public class Client {
 
     static void reportProgress(ArrayList<ConnectServer>ConnectServerList){
         for(int i=0;i<ConnectServerList.size();i++){
-            if(ConnectServerList.get(i).getStatus()!=3&&ConnectServerList.get(i).getStatus()!=4){
-                ConnectServerList.get(i).setStatus(1);
+            if(ConnectServerList.get(i).getStatus()!=Status.Finish&&ConnectServerList.get(i).getStatus()!=Status.Delete){
+                ConnectServerList.get(i).setStatus(Status.Report);
             }
         }
     }
@@ -88,7 +88,7 @@ public class Client {
             command=sc.next();
             int cnt=0;
             for(int i=0;i<filePaths.size();i++){
-                if(connectServerList.get(i).getStatus()==3|| connectServerList.get(i).getStatus()==4)cnt++;
+                if(connectServerList.get(i).getStatus()==Status.Finish|| connectServerList.get(i).getStatus()==Status.Delete)cnt++;
                 if(cnt==filePaths.size())break StatusMonitor;
             }
             if(command.equals("c")){
@@ -105,9 +105,10 @@ class ConnectServer implements Runnable{
     private final PrintWriter out;
     private final String aimPath;
     private final String command;
-    private volatile int status=-1;//0正在进行,1报告一次进度,2暂停,3已完成,4终止任务
+//    private volatile int status=-1;//0正在进行,1报告一次进度,2暂停,3已完成,4终止任务
+    private volatile Status status;
 
-    public ConnectServer(String host,int port, String aimPath,String command,int id) throws IOException {
+    public ConnectServer(String host,int port, String aimPath,String command) throws IOException {
         socket=new Socket(host,port);
         this.aimPath=aimPath;
         this.command=command;
@@ -116,17 +117,17 @@ class ConnectServer implements Runnable{
 
     }
 
-    public void setStatus(int status) {
+    public void setStatus(Status status) {
         this.status = status;
     }
-    public int getStatus(){
+    public Status getStatus(){
         return this.status;
     }
 
     @Override
     public void run() {
         try {
-            status=0;
+            status=Status.Transfom;
             if (command.equals("u")) {
                 upload();
             }else if(command.equals("d")){
@@ -155,21 +156,21 @@ class ConnectServer implements Runnable{
 
             String line;
             while(true){
-                if(status==0) {
+                if(status==Status.Transfom) {
                     Thread.sleep(200);
                     line = bufferedReader.readLine();
                     if(line!=null) {
                         out.println(line);
                     }else {
-                        status=4;
+                        status=Status.Finish;
                         out.println("__###finish###__");
                         System.out.println(aimPath+"文件已上传完成");
                         break;
                     }
-                }else if(status==1){
+                }else if(status==Status.Report){
                     out.println("__###check###__");
                     System.out.println(in.readLine());
-                    status=0;
+                    status=Status.Transfom;
                 }
             }
 
@@ -191,20 +192,20 @@ class ConnectServer implements Runnable{
             BufferedWriter writer=new BufferedWriter(new FileWriter(file));
 
             while(true) {
-                if(status==0){
+                if(status==Status.Transfom){
                     infoFromServer= in.readLine();
                     if(!infoFromServer.equals("__###finish###__")){
                         writer.write(infoFromServer);
                         bytesCount+=infoFromServer.getBytes().length;
                     }else{
-                        status=4;
+                        status=Status.Finish;
                         System.out.println(aimPath+"文件已接收完毕 ");
                         writer.close();
                         break;
                     }
-                }else if(status==1){
+                }else if(status==Status.Report){
                     System.out.println(Toolbox.calculateProgress(aimPath,bytesCount,bytesAmount));
-                    status=0;
+                    status=Status.Transfom;
                 }
             }
         }else if(infoFromServer.equals("__###None###__")){
