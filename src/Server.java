@@ -51,8 +51,6 @@ class ClientHandler implements Runnable {
 
             }
 
-            // 向客户端发送响应数据
-
             // 关闭连接
             in.close();
             out.close();
@@ -69,17 +67,17 @@ class ClientHandler implements Runnable {
             File localFile = new File(localPath);
             if (localFile.createNewFile()) {
                 out.println("__###ready###__");
-                long bytesCount=Long.parseLong(in.readLine());
-                long amount=0;
+                long bytesAmount =Long.parseLong(in.readLine());
+                long bytesCount=0;
                 BufferedWriter writer = new BufferedWriter(new FileWriter(localFile));
                 while (true){
                     String inputLine=in.readLine();
                     if(inputLine.equals("__###finish###__")){
                         break;
                     }else if(inputLine.equals("__###check###__")){
-                        reportProgress(aimPath,amount,bytesCount,out);
+                        out.println(Toolbox.calculateProgress(aimPath,bytesCount, bytesAmount));
                     }else {
-                        amount+=inputLine.getBytes().length;
+                        bytesCount+=inputLine.getBytes().length;
                         writer.write(inputLine + "\n");
                     }
                 }
@@ -94,30 +92,33 @@ class ClientHandler implements Runnable {
         }
     }
 
-        void download(BufferedReader in ,PrintWriter out, String aimPath){
-            try {
-                File file=new File(aimPath);
-                String localPath = "Storage/" + file.getName();
-                File localFile = new File(localPath);
-                if(localFile.exists()){
-                    out.println("__###exist###__");
-                    BufferedReader reader=new BufferedReader(new FileReader(localFile));
-                    String line;
-                    while((line=reader.readLine())!=null){
-                        out.println(line);
-                    }
-                    out.println("__###finish###__");
-                    System.out.println(aimPath+"文件已传输完毕");
-                    reader.close();
-                }else {
-                    out.println("__###None###__");
-                    System.out.println(aimPath+"文件不存在");
+    void download(BufferedReader in ,PrintWriter out, String aimPath){
+        try {
+            File file=new File(aimPath);
+            String localPath = "Storage/" + file.getName();
+            File localFile = new File(localPath);
+            if(localFile.exists()){
+                out.println("__###exist###__");
+                out.println(Toolbox.countBytes(localFile));//告知客户端将下载的文件的大小
+                BufferedReader reader=new BufferedReader(new FileReader(localFile));
+                String line;
+                while((line=reader.readLine())!=null){
+                    Thread.sleep(1000);
+                    out.println(line);
                 }
-            }catch (IOException e){
-                e.printStackTrace();
+                out.println("__###finish###__");
+                System.out.println(aimPath+"文件已传输完毕");
+                reader.close();
+            }else {
+                out.println("__###None###__");
+                System.out.println(aimPath+"文件不存在");
             }
+        }catch (IOException e){
+            e.printStackTrace();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
         }
-        void reportProgress(String aimPath,long amount,long bytesCount,PrintWriter out){
-            out.printf("%s目前已传输: %f%% \n",aimPath,(double) 100*amount/bytesCount);
-        }
+    }
+
+
 }
