@@ -1,11 +1,13 @@
 import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class Client {
+
     public static void main(String[] args) throws IOException {
         Scanner sc=new Scanner(System.in);
         System.out.println("请输入您所需要的服务u/d");
@@ -18,11 +20,26 @@ public class Client {
                 checkDir(path,filePaths);
             }
             ExecutorService executorService=Executors.newFixedThreadPool(filePaths.size());
+            HashMap<String,Integer> path_id =new HashMap<>();
+            ArrayList<ConnectServer>ConnectServerList=new ArrayList<>();
             for(int i=0;i<filePaths.size();i++){
-                executorService.execute(new ConnectServer("localhost",8000,filePaths.get(i),"u"));
+                path_id.put(filePaths.get(i),i);
+                ConnectServer connectServer=new ConnectServer("localhost",8000,filePaths.get(i),"u",i);
+                ConnectServerList.add(connectServer);
+                executorService.execute(connectServer);
             }
-            String nextCommand;
-
+            StatusMonitor:while(true){
+                System.out.println("检查执行状态请输入c");
+                command=sc.next();
+                int cnt=0;
+                for(int i=0;i<filePaths.size();i++){
+                    if(ConnectServerList.get(i).getStatus()==3||ConnectServerList.get(i).getStatus()==4)cnt++;
+                    if(cnt==filePaths.size())break StatusMonitor;
+                }
+                if(command.equals("c")){
+                    reportProgress(ConnectServerList);
+                }
+            }
             executorService.shutdown();
         }else if(command.equals("d")){
             System.out.println("请输入您想要上传的文件名称，并在输入完后输入<");
@@ -33,8 +50,9 @@ public class Client {
             }
             ExecutorService executorService=Executors.newFixedThreadPool(fileName.size());
             for(int i=0;i<fileName.size();i++){
-                executorService.execute(new ConnectServer("localhost",8000,fileName.get(i),"d"));
+                executorService.execute(new ConnectServer("localhost",8000,fileName.get(i),"d",i));
             }
+            executorService.shutdown();
         }else {
             System.out.println("输入有误");
         }
@@ -52,24 +70,42 @@ public class Client {
             filesPath.add(path);
         }
     }
+    static void reportProgress(ArrayList<ConnectServer>ConnectServerList){
+        for(int i=0;i<ConnectServerList.size();i++){
+            if(ConnectServerList.get(i).getStatus()!=3&&ConnectServerList.get(i).getStatus()!=4){
+                ConnectServerList.get(i).setStatus(1);
+            }
+        }
+    }
 }
 class ConnectServer implements Runnable{
-    Socket socket;
-    BufferedReader in;
-    PrintWriter out;
-    String aimPath;
-    String command;
-    public ConnectServer(String host,int port, String aimPath,String command) throws IOException {
+    private final Socket socket;
+    private final BufferedReader in;
+    private final PrintWriter out;
+    private final String aimPath;
+    private final String command;
+    private volatile int status=-1;//0正在进行,1报告一次进度,2暂停,3已完成,4终止任务
+
+    public ConnectServer(String host,int port, String aimPath,String command,int id) throws IOException {
         socket=new Socket(host,port);
         this.aimPath=aimPath;
         this.command=command;
         this.in=new BufferedReader(new InputStreamReader(socket.getInputStream()));
         this.out=new PrintWriter(socket.getOutputStream(),true);
+
+    }
+
+    public void setStatus(int status) {
+        this.status = status;
+    }
+    public int getStatus(){
+        return this.status;
     }
 
     @Override
     public void run() {
         try {
+            status=0;
             if (command.equals("u")) {
                 upload();
             }else if(command.equals("d")){
@@ -80,21 +116,37 @@ class ConnectServer implements Runnable{
             out.close();
         }catch (IOException e){
             e.printStackTrace();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
         }
 
     }
-    void upload() throws IOException {
+    void upload() throws IOException, InterruptedException {
         out.println("u");
         out.println(aimPath);
         String infoFromServer=in.readLine();
         if(infoFromServer.equals("__###ready###__")){
             File file=new File(aimPath);
             BufferedReader bufferedReader=new BufferedReader(new FileReader(file));
+            //首先统计文本内的byte数目并告知服务端
+            long byteCount=countBytes(file);
+            out.println(byteCount);
+
             String line;
-            while((line =bufferedReader.readLine())!=null){
-                out.println(line);
-                line =bufferedReader.readLine();
+            while(true){
+                if(status==0) {
+                    Thread.sleep(1000);
+                    line = bufferedReader.readLine();
+                    if(line!=null) {
+                        out.println(line);
+                    }else break;
+                }else if(status==1){
+                    out.println("__###check###__");
+                    System.out.println(in.readLine());
+                    status=0;
+                }
             }
+            status=4;
             out.println("__###finish###__");
             System.out.println(aimPath+"文件已上传完成");
         }else if(infoFromServer.equals("__###exist###__")){
@@ -123,4 +175,15 @@ class ConnectServer implements Runnable{
             System.out.println("接收到了意料之外的信息");
         }
     }
+    long countBytes(File aimFile) throws IOException {
+        BufferedReader bufferedReader=new BufferedReader(new FileReader(aimFile));
+        String temp;
+        long byteCount=0;
+         while((temp=bufferedReader.readLine())!=null){
+             byteCount+=temp.getBytes().length;
+         }
+         bufferedReader.close();
+         return byteCount;
+    }
+
 }

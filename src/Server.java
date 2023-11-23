@@ -69,10 +69,19 @@ class ClientHandler implements Runnable {
             File localFile = new File(localPath);
             if (localFile.createNewFile()) {
                 out.println("__###ready###__");
+                long bytesCount=Long.parseLong(in.readLine());
+                long amount=0;
                 BufferedWriter writer = new BufferedWriter(new FileWriter(localFile));
-                String inputLine;
-                while (!(inputLine=in.readLine()).equals("__###finish###__")){
-                    writer.write(inputLine+"\n");
+                while (true){
+                    String inputLine=in.readLine();
+                    if(inputLine.equals("__###finish###__")){
+                        break;
+                    }else if(inputLine.equals("__###check###__")){
+                        reportProgress(aimPath,amount,bytesCount,out);
+                    }else {
+                        amount+=inputLine.getBytes().length;
+                        writer.write(inputLine + "\n");
+                    }
                 }
                 writer.close();
                 System.out.println(aimPath+"文件已接收完毕");
@@ -107,5 +116,8 @@ class ClientHandler implements Runnable {
             }catch (IOException e){
                 e.printStackTrace();
             }
+        }
+        void reportProgress(String aimPath,long amount,long bytesCount,PrintWriter out){
+            out.printf("%s目前已传输: %f%% \n",aimPath,(double) 100*amount/bytesCount);
         }
 }
