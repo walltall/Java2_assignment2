@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+  <component name="AutoImportSettings">
+  </component>
+    <list default="true" id="bf901e05-dbf0-4c53-a396-f53e25af8f2c" name="更改" comment="" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  <component name="FileTemplateManagerImpl">
+      <list>
+      </list>
+  </component>
+  "associatedIndex": 3
+  <component name="ProjectId" id="2YZIExVVWnPfWB0iBBR7ukZnAwu" />
+    <option name="hideEmptyMiddlePackages" value="true" />
+  </component>
+  "keyToString": {
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "node.js.detected.package.eslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "onboarding.tips.debug.path": "D:/Java_code/Java2_assignment2/src/Main.java",
+    "vue.rearranger.settings.migration": "true"
+}]]></component>
+    <configuration name="Server" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
+      <module name="Java2_assignment2" />
+        <option name="Make" enabled="true" />
+    </configuration>
+      <option name="MAIN_CLASS_NAME" value="Client" />
+      <method v="2">
+      </method>
+    <list>
+      <item itemvalue="应用程序.Server" />
+    <recent_temporary>
+        <item itemvalue="应用程序.Server" />
+    </recent_temporary>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="应用程序级" UseSingleDictionary="true" transferred="true" />
+    <task active="true" id="Default" summary="默认任务">
+      <created>1700726567993</created>
+      <option name="presentableId" value="Default" />
+      <workItem from="1700726568994" duration="5632000" />
+    <servers />
+  <component name="TypeScriptGeneratedFilesManager">
+  </component>
+    <expand />
+  </component>
