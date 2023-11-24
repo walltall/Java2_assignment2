@@ -3,12 +3,13 @@ import java.net.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Scanner;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class Client {
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, InterruptedException {
         Scanner sc=new Scanner(System.in);
         System.out.println("请输入您所需要的服务u/d");
         String command=sc.next();
@@ -30,7 +31,7 @@ public class Client {
                 executorService.execute(connectServer);
             }
 
-            UserActions(sc, ConnectServerList, filePaths, executorService);
+            UserActions(sc, ConnectServerList, filePaths, executorService,path_id);
 
 
         }else if(command.equals("d")){
@@ -48,13 +49,13 @@ public class Client {
                 executorService.execute(connectServer);
             }
 
-            UserActions(sc,ConnectServerList, fileName, executorService);
+            UserActions(sc,ConnectServerList, fileName, executorService,path_id);
 
 
         }else {
             System.out.println("输入有误");
         }
-
+        sc.close();
 
     }
 
@@ -74,25 +75,70 @@ public class Client {
     }
 
     static void reportProgress(ArrayList<ConnectServer>ConnectServerList){
-        for(int i=0;i<ConnectServerList.size();i++){
-            if(ConnectServerList.get(i).getStatus()!=Status.Finish&&ConnectServerList.get(i).getStatus()!=Status.Delete){
-                ConnectServerList.get(i).setStatus(Status.Report);
+        for (ConnectServer connectServer : ConnectServerList) {
+            if (connectServer.getStatus() != Status.Finish && connectServer.getStatus() != Status.Delete) {
+                connectServer.setStatus(Status.Report);
             }
         }
     }
+    static void waitProgress(ArrayList<ConnectServer>ConnectServerList,HashMap<String,Integer>path_id,Scanner sc){
+        ArrayList<String>waitList=new ArrayList<>();
+        String aimFile;
+        while(!(aimFile=sc.next()).equals("<")){
+            waitList.add(aimFile);
+        }
+        for(int i=0;i<waitList.size();i++){
+            ConnectServerList.get(path_id.get(waitList.get(i))).setStatus(Status.Wait);
+        }
+    }
+    static void activateProgress(ArrayList<ConnectServer>ConnectServerList,HashMap<String,Integer>path_id,Scanner sc){
+        ArrayList<String> activeList =new ArrayList<>();
+        String aimFile;
+        while(!(aimFile=sc.next()).equals("<")){
+            activeList.add(aimFile);
+        }
+        for(int i = 0; i< activeList.size(); i++){
+            ConnectServerList.get(path_id.get(activeList.get(i))).setStatus(Status.Transfom);
+        }
+    }
+    static void deleteProgress(ArrayList<ConnectServer>ConnectServerList,HashMap<String,Integer>path_id,Scanner sc){
+        ArrayList<String> activeList =new ArrayList<>();
+        String aimFile;
+        while(!(aimFile=sc.next()).equals("<")){
+            activeList.add(aimFile);
+        }
+        for(int i = 0; i< activeList.size(); i++){
+            ConnectServerList.get(path_id.get(activeList.get(i))).setStatus(Status.Delete);
+        }
+    }
 
-    static void UserActions(Scanner sc, ArrayList<ConnectServer> connectServerList, ArrayList<String> filePaths, ExecutorService executorService) {
+
+    static void UserActions(Scanner sc, ArrayList<ConnectServer> connectServerList, ArrayList<String> filePaths, ExecutorService executorService,
+                            HashMap<String,Integer>path_id) throws InterruptedException {
         String command;
+        CountDownLatch latch=new CountDownLatch(1);
         StatusMonitor:while(true){
-            System.out.println("检查执行状态请输入c");
-            command=sc.next();
             int cnt=0;
             for(int i=0;i<filePaths.size();i++){
                 if(connectServerList.get(i).getStatus()==Status.Finish|| connectServerList.get(i).getStatus()==Status.Delete)cnt++;
                 if(cnt==filePaths.size())break StatusMonitor;
             }
+            System.out.println("检查执行状态请输入c,暂停文件下载请输入w,恢复暂停下载的请输入a,删除下载任务请输入de");
+            command=sc.next();
             if(command.equals("c")){
                 reportProgress(connectServerList);
+            }
+            if(command.equals("w")){
+                System.out.println("请输入想要暂停传输的文件，并在输入结束后输入<");
+                waitProgress(connectServerList,path_id,sc);
+            }
+            if(command.equals("a")){
+                System.out.println("请输入想要恢复传输的文件，并在输入结束后输入<");
+                activateProgress(connectServerList,path_id,sc);
+            }
+            if(command.equals("de")){
+                System.out.println("请输入想要取消传输的文件，并在输入结束后输入<");
+                deleteProgress(connectServerList,path_id,sc);
             }
         }
         executorService.shutdown();
@@ -100,16 +146,15 @@ public class Client {
 
 }
 class ConnectServer implements Runnable{
-    private final Socket socket;
     private final BufferedReader in;
     private final PrintWriter out;
     private final String aimPath;
     private final String command;
 //    private volatile int status=-1;//0正在进行,1报告一次进度,2暂停,3已完成,4终止任务
     private volatile Status status;
-
+    private volatile Status prev_status;
     public ConnectServer(String host,int port, String aimPath,String command) throws IOException {
-        socket=new Socket(host,port);
+        Socket socket = new Socket(host, port);
         this.aimPath=aimPath;
         this.command=command;
         this.in=new BufferedReader(new InputStreamReader(socket.getInputStream()));
@@ -118,6 +163,7 @@ class ConnectServer implements Runnable{
     }
 
     public void setStatus(Status status) {
+        this.prev_status=this.status;
         this.status = status;
     }
     public Status getStatus(){
@@ -153,7 +199,6 @@ class ConnectServer implements Runnable{
             //首先统计文本内的byte数目并告知服务端
             long byteCount= Toolbox.countBytes(file);
             out.println(byteCount);
-
             String line;
             while(true){
                 if(status==Status.Transfom) {
@@ -170,10 +215,17 @@ class ConnectServer implements Runnable{
                 }else if(status==Status.Report){
                     out.println("__###check###__");
                     System.out.println(in.readLine());
-                    status=Status.Transfom;
+                    status=this.prev_status;
+                }else if(status==Status.Wait){
+                    //持续告知服务端保持暂停状态,避免服务端因暂停超时而终止服务
+                    out.println("__###wait###__");
+
+                }else if (status==Status.Delete){
+                    out.println("__###delete###__");
+                    break;
                 }
             }
-
+            bufferedReader.close();
         }else if(infoFromServer.equals("__###exist###__")){
             System.out.println(aimPath+"已经在服务器上存在了");
         }else {
@@ -184,18 +236,20 @@ class ConnectServer implements Runnable{
     void download() throws IOException{
         out.println("d");
         out.println(aimPath);
+        out.println("__###accept###__");
         String infoFromServer=in.readLine();
         if(infoFromServer.equals("__###exist###__")){
             long bytesAmount=Long.parseLong(in.readLine());
             long bytesCount=0;
             File file=new File("localStorage/"+aimPath);
             BufferedWriter writer=new BufferedWriter(new FileWriter(file));
-
             while(true) {
                 if(status==Status.Transfom){
                     infoFromServer= in.readLine();
                     if(!infoFromServer.equals("__###finish###__")){
+                        out.println("__###accept###__");
                         writer.write(infoFromServer);
+                        writer.write("\n");
                         bytesCount+=infoFromServer.getBytes().length;
                     }else{
                         status=Status.Finish;
@@ -205,9 +259,18 @@ class ConnectServer implements Runnable{
                     }
                 }else if(status==Status.Report){
                     System.out.println(Toolbox.calculateProgress(aimPath,bytesCount,bytesAmount));
-                    status=Status.Transfom;
+                    status=this.prev_status;
+                }else if(status==Status.Wait){
+                    out.println("__###wait###__");
+                }else if(status==Status.Delete){
+                    out.println("__###delete###__");
+                    System.out.println(aimPath+"文件的传输已取消");
+                    writer.close();
+                    file.delete();
+                    return;
                 }
             }
+            writer.close();
         }else if(infoFromServer.equals("__###None###__")){
             System.out.println("服务器上不存在目标文件");
         }else {

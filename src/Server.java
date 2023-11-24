@@ -74,8 +74,16 @@ class ClientHandler implements Runnable {
                     String inputLine=in.readLine();
                     if(inputLine.equals("__###finish###__")){
                         break;
-                    }else if(inputLine.equals("__###check###__")){
-                        out.println(Toolbox.calculateProgress(aimPath,bytesCount, bytesAmount));
+                    }else if(inputLine.equals("__###check###__")) {
+                        out.println(Toolbox.calculateProgress(aimPath, bytesCount, bytesAmount));
+                    }else if(inputLine.equals("__###wait###__")) {
+                        //此状态维持空体就行
+                        continue;
+                    }else if(inputLine.equals("__###delete###__")){
+                        writer.close();
+                        localFile.delete();
+                        System.out.println(aimPath+"文件的传输已取消");
+                        return;
                     }else {
                         bytesCount+=inputLine.getBytes().length;
                         writer.write(inputLine + "\n");
@@ -101,10 +109,23 @@ class ClientHandler implements Runnable {
                 out.println("__###exist###__");
                 out.println(Toolbox.countBytes(localFile));//告知客户端将下载的文件的大小
                 BufferedReader reader=new BufferedReader(new FileReader(localFile));
-                String line;
-                while((line=reader.readLine())!=null){
-                    Thread.sleep(1000);
-                    out.println(line);
+                while(true){
+                    String response=in.readLine();
+                    if(response.equals("__###accept###__")){
+                        Thread.sleep(200);
+                        String line=reader.readLine();
+                        if(line!=null) {
+                            out.println(line);
+                        }else {
+                            break;
+                        }
+                    }else if(response.equals("__###wait###__")){
+                        continue;
+                    }else if(response.equals("__###delete###__")){
+                        reader.close();
+                        System.out.println(aimPath+"文件的传输已取消");
+                        return;
+                    }
                 }
                 out.println("__###finish###__");
                 System.out.println(aimPath+"文件已传输完毕");
