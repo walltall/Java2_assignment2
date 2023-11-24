@@ -75,6 +75,7 @@ class ClientHandler implements Runnable {
                     if(inputLine.equals("__###finish###__")){
                         break;
                     }else if(inputLine.equals("__###check###__")) {
+                        System.out.println(Toolbox.calculateProgress(aimPath, bytesCount, bytesAmount));
                         out.println(Toolbox.calculateProgress(aimPath, bytesCount, bytesAmount));
                     }else if(inputLine.equals("__###wait###__")) {
                         //此状态维持空体就行

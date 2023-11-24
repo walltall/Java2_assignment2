@@ -30,10 +30,7 @@ public class Client {
                 ConnectServerList.add(connectServer);
                 executorService.execute(connectServer);
             }
-
             UserActions(sc, ConnectServerList, filePaths, executorService,path_id);
-
-
         }else if(command.equals("d")){
             System.out.println("请输入您想要上传的文件名称，并在输入完后输入<");
             String path;
@@ -48,10 +45,7 @@ public class Client {
                 ConnectServerList.add(connectServer);
                 executorService.execute(connectServer);
             }
-
             UserActions(sc,ConnectServerList, fileName, executorService,path_id);
-
-
         }else {
             System.out.println("输入有误");
         }
@@ -214,7 +208,11 @@ class ConnectServer implements Runnable{
                     }
                 }else if(status==Status.Report){
                     out.println("__###check###__");
-                    System.out.println(in.readLine());
+                    String temp=in.readLine();
+                    while (temp.equals("")){
+                        temp=in.readLine();
+                    }
+                    System.out.println(temp + this.prev_status);
                     status=this.prev_status;
                 }else if(status==Status.Wait){
                     //持续告知服务端保持暂停状态,避免服务端因暂停超时而终止服务
@@ -258,7 +256,7 @@ class ConnectServer implements Runnable{
                         break;
                     }
                 }else if(status==Status.Report){
-                    System.out.println(Toolbox.calculateProgress(aimPath,bytesCount,bytesAmount));
+                    System.out.println(Toolbox.calculateProgress(aimPath,bytesCount,bytesAmount) + this.prev_status);
                     status=this.prev_status;
                 }else if(status==Status.Wait){
                     out.println("__###wait###__");
