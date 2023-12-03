@@ -25,12 +25,12 @@ public class Client {
             }
             ExecutorService executorService=Executors.newFixedThreadPool(filePaths.size());
             for(int i=0;i<filePaths.size();i++){
-                path_id.put(filePaths.get(i),i);
+                path_id.put(storeFilesPaths.get(i),i);
                 ConnectServer connectServer=new ConnectServer("localhost",8000,filePaths.get(i),storeFilesPaths.get(i),"u");
                 ConnectServerList.add(connectServer);
                 executorService.execute(connectServer);
             }
-            UserActions(sc, ConnectServerList, filePaths, executorService,path_id);
+            UserActions(sc, ConnectServerList, storeFilesPaths, executorService,path_id);
         }else if(command.equals("d")){
             System.out.println("请输入您想要上传的文件名称，并在输入完后输入<");
             String path;
@@ -73,28 +73,43 @@ public class Client {
             while (!(aimFile = sc.next()).equals("<")) {
                 waitList.add(aimFile);
             }
-            for (int i = 0; i < waitList.size(); i++) {
-                if(ConnectServerList.get(path_id.get(waitList.get(i))).getStatus()==Status.Finish
-                        ||ConnectServerList.get(path_id.get(waitList.get(i))).getStatus()==Status.Delete){
-                    System.out.println(waitList.get(i)+"已完成/删除，无法暂停");
-                }else {
-                    ConnectServerList.get(path_id.get(waitList.get(i))).setStatus(Status.Wait);
+            for (String s : waitList) {
+                if (ConnectServerList.get(path_id.get(s)).getStatus() == Status.Finish
+                        || ConnectServerList.get(path_id.get(s)).getStatus() == Status.Delete) {
+                    System.out.println(s + "已完成/删除，无法暂停");
+                } else {
+                    ConnectServerList.get(path_id.get(s)).setStatus(Status.Wait);
                 }
             }
         }else {
             for(int i=0;i<ConnectServerList.size();i++){
-                ConnectServerList.get(i).setStatus(Status.Wait);
+                if (ConnectServerList.get(i).getStatus() != Status.Finish
+                        && ConnectServerList.get(i).getStatus() != Status.Delete) {
+                    ConnectServerList.get(i).setStatus(Status.Wait);
+                }
             }
         }
     }
-    static void activateProgress(ArrayList<ConnectServer>ConnectServerList,HashMap<String,Integer>path_id,Scanner sc){
-        ArrayList<String> activeList =new ArrayList<>();
-        String aimFile;
-        while(!(aimFile=sc.next()).equals("<")){
-            activeList.add(aimFile);
-        }
-        for(int i = 0; i< activeList.size(); i++){
-            ConnectServerList.get(path_id.get(activeList.get(i))).setStatus(Status.Transfom);
+    static void activateProgress(ArrayList<ConnectServer>ConnectServerList,HashMap<String,Integer>path_id,Scanner sc,boolean isAll){
+        if(!isAll) {
+            ArrayList<String> activeList = new ArrayList<>();
+            String aimFile;
+            while (!(aimFile = sc.next()).equals("<")) {
+                activeList.add(aimFile);
+            }
+            for (int i = 0; i < activeList.size(); i++) {
+                if(ConnectServerList.get(path_id.get(activeList.get(i))).getStatus()!=Status.Finish&&
+                        ConnectServerList.get(path_id.get(activeList.get(i))).getStatus()!=Status.Delete) {
+                    ConnectServerList.get(path_id.get(activeList.get(i))).setStatus(Status.Transfom);
+                }
+            }
+        }else {
+            for(int i=0;i<ConnectServerList.size();i++){
+                if (ConnectServerList.get(i).getStatus() != Status.Finish
+                        && ConnectServerList.get(i).getStatus() != Status.Delete) {
+                    ConnectServerList.get(i).setStatus(Status.Transfom);
+                }
+            }
         }
     }
     static void deleteProgress(ArrayList<ConnectServer>ConnectServerList,HashMap<String,Integer>path_id,Scanner sc){
@@ -118,7 +133,7 @@ public class Client {
                 if(connectServerList.get(i).getStatus()==Status.Finish|| connectServerList.get(i).getStatus()==Status.Delete)cnt++;
                 if(cnt==filePaths.size())break StatusMonitor;
             }
-            System.out.println("检查执行状态请输入c,暂停部分文件下载请输入w,暂停全部文件下载请输入wa,\n恢复暂停下载的请输入a,删除下载任务请输入de");
+            System.out.println("检查执行状态请输入c,暂停部分文件下载请输入w,暂停全部文件下载请输入wa,\n恢复暂停下载的某一文件请输入a,恢复暂停下载的所有文件请输入aa,删除下载任务请输入de");
             command=sc.next();
             if(command.equals("c")){
                 reportProgress(connectServerList);
@@ -133,7 +148,11 @@ public class Client {
             }
             if(command.equals("a")){
                 System.out.println("请输入想要恢复传输的文件，并在输入结束后输入<");
-                activateProgress(connectServerList,path_id,sc);
+                activateProgress(connectServerList,path_id,sc,false);
+            }
+            if(command.equals("aa")){
+                System.out.println("恢复所有文件的传输");
+                activateProgress(connectServerList,path_id,sc,true);
             }
             if(command.equals("de")){
                 System.out.println("请输入想要取消传输的文件，并在输入结束后输入<");
@@ -204,13 +223,13 @@ class ConnectServer implements Runnable{
             String line;
             while(true){
                 if(status==Status.Transfom) {
-                    Thread.sleep(2);
                     int bytesRead=buffered.read(fileData);
                     if(bytesRead!=-1) {
                         out.writeUTF("__###content###__");
                         out.write(fileData,0,bytesRead);
                     }else {
                         status=Status.Finish;
+                        Thread.sleep(30);
                         out.writeUTF("__###finish###__");
                         System.out.println(aimPath+"文件已上传完成");
                         break;
@@ -218,7 +237,7 @@ class ConnectServer implements Runnable{
                 }else if(status==Status.Report){
                     out.writeUTF("__###check###__");
                     String temp=in.readUTF();
-                    while (temp.equals("")){
+                    while(temp.equals("")){
                         temp=in.readUTF();
                     }
                     System.out.println(temp + this.prev_status);
@@ -255,13 +274,11 @@ class ConnectServer implements Runnable{
             while(true) {
                 if(status==Status.Transfom){
                     infoFromServer= in.readUTF();
-                    Thread.sleep(50);
                     if(infoFromServer.equals("__###finish###__")){
                         status=Status.Finish;
                         System.out.println(aimPath+"文件已接收完毕 ");
                         writer.close();
                         break;
-
                     }else if(infoFromServer.equals("__###content###__")){
                         out.writeUTF("__###accept###__");
                         int bytesRead=in.read(buffer);

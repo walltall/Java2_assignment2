@@ -74,30 +74,39 @@ class ClientHandler implements Runnable {
                 long bytesCount=0;
                 byte[]buffer=new byte[2048];
                 BufferedOutputStream writer = new BufferedOutputStream(new FileOutputStream(localFile));
-                while (true){
-                    String inputLine=in.readUTF();
-                    if(inputLine.equals("__###finish###__")){
-                        break;
-                    }else if(inputLine.equals("__###check###__")) {
-                        System.out.println(Toolbox.calculateProgress(aimPath, bytesCount, bytesAmount));
-                        out.writeUTF(Toolbox.calculateProgress(aimPath, bytesCount, bytesAmount));
-                    }else if(inputLine.equals("__###wait###__")) {
-                        //此状态维持空体就行
-                        continue;
-                    }else if(inputLine.equals("__###delete###__")){
-                        writer.close();
-                        localFile.delete();
-                        System.out.println(aimPath+"文件的传输已取消");
-                        return;
-                    }else if (inputLine.equals("__###content###__")){
-                        int bytesRead=in.read(buffer);
-                        bytesCount+=bytesRead;
-                        if(bytesRead==-1){
+                try {
+                    while (true) {
+                        String inputLine = in.readUTF();
+                        if (inputLine.equals("__###finish###__")) {
                             break;
+                        } else if (inputLine.equals("__###check###__")) {
+                            System.out.println(Toolbox.calculateProgress(aimPath, bytesCount, bytesAmount));
+                            out.writeUTF(Toolbox.calculateProgress(aimPath, bytesCount, bytesAmount));
+                        } else if (inputLine.equals("__###wait###__")) {
+                            //此状态维持空体就行
+                            continue;
+                        } else if (inputLine.equals("__###delete###__")) {
+                            writer.close();
+                            localFile.delete();
+                            System.out.println(aimPath + "文件的传输已取消");
+                            return;
+                        } else if (inputLine.equals("__###content###__")) {
+                            int bytesRead = in.read(buffer);
+                            bytesCount += bytesRead;
+                            if (bytesRead == -1) {
+                                break;
+                            }
+                            if(bytesCount>bytesAmount){
+                                System.out.println("over");
+                                System.out.println(String.valueOf(buffer));
+                            }
+                            writer.write(buffer, 0, bytesRead);
                         }
-                        writer.write(buffer,0,bytesRead);
                     }
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
                 }
+                writer.flush();
                 writer.close();
                 System.out.println(aimPath+"文件已接收完毕");
             }else {
@@ -112,7 +121,7 @@ class ClientHandler implements Runnable {
     void download(DataInputStream in ,DataOutputStream out, String aimPath){
         try {
             File file=new File(aimPath);
-            String localPath = "Storage" + file.getPath();
+            String localPath = "Storage/" + file.getPath();
             File localFile = new File(localPath);
             if(localFile.exists()){
                 out.writeUTF("__###exist###__");
@@ -122,7 +131,6 @@ class ClientHandler implements Runnable {
                 while(true){
                     String response=in.readUTF();
                     if(response.equals("__###accept###__")){
-                        Thread.sleep(50);
                         int bytesRead=reader.read(buffer);
                         if(bytesRead!=-1) {
                             out.writeUTF("__###content###__");
@@ -138,6 +146,7 @@ class ClientHandler implements Runnable {
                         return;
                     }
                 }
+                Thread.sleep(30);
                 out.writeUTF("__###finish###__");
                 System.out.println(aimPath+"文件已传输完毕");
                 reader.close();
