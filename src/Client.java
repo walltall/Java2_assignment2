@@ -110,7 +110,6 @@ public class Client {
     static void UserActions(Scanner sc, ArrayList<ConnectServer> connectServerList, ArrayList<String> filePaths, ExecutorService executorService,
                             HashMap<String,Integer>path_id) throws InterruptedException {
         String command;
-        CountDownLatch latch=new CountDownLatch(1);
         StatusMonitor:while(true){
             int cnt=0;
             for(int i=0;i<filePaths.size();i++){
@@ -141,7 +140,7 @@ public class Client {
 }
 class ConnectServer implements Runnable{
     private final BufferedReader in;
-    private final PrintWriter out;
+    private final BufferedWriter out;
     private final String aimPath;
     private final String command;
 //    private volatile int status=-1;//0正在进行,1报告一次进度,2暂停,3已完成,4终止任务
@@ -152,7 +151,7 @@ class ConnectServer implements Runnable{
         this.aimPath=aimPath;
         this.command=command;
         this.in=new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        this.out=new PrintWriter(socket.getOutputStream(),true);
+        this.out=new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
 
     }
 
@@ -196,7 +195,7 @@ class ConnectServer implements Runnable{
             String line;
             while(true){
                 if(status==Status.Transfom) {
-                    Thread.sleep(200);
+                    Thread.sleep(2);
                     line = bufferedReader.readLine();
                     if(line!=null) {
                         out.println(line);

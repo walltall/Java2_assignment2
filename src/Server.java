@@ -113,7 +113,7 @@ class ClientHandler implements Runnable {
                 while(true){
                     String response=in.readLine();
                     if(response.equals("__###accept###__")){
-                        Thread.sleep(200);
+                        Thread.sleep(2);
                         String line=reader.readLine();
                         if(line!=null) {
                             out.println(line);
