@@ -74,7 +74,12 @@ public class Client {
                 waitList.add(aimFile);
             }
             for (int i = 0; i < waitList.size(); i++) {
-                ConnectServerList.get(path_id.get(waitList.get(i))).setStatus(Status.Wait);
+                if(ConnectServerList.get(path_id.get(waitList.get(i))).getStatus()==Status.Finish
+                        ||ConnectServerList.get(path_id.get(waitList.get(i))).getStatus()==Status.Delete){
+                    System.out.println(waitList.get(i)+"已完成/删除，无法暂停");
+                }else {
+                    ConnectServerList.get(path_id.get(waitList.get(i))).setStatus(Status.Wait);
+                }
             }
         }else {
             for(int i=0;i<ConnectServerList.size();i++){
@@ -136,6 +141,7 @@ public class Client {
             }
         }
         executorService.shutdown();
+        System.out.println("所有任务已完成");
     }
 
 }
@@ -249,7 +255,7 @@ class ConnectServer implements Runnable{
             while(true) {
                 if(status==Status.Transfom){
                     infoFromServer= in.readUTF();
-                    Thread.sleep(200);
+                    Thread.sleep(50);
                     if(infoFromServer.equals("__###finish###__")){
                         status=Status.Finish;
                         System.out.println(aimPath+"文件已接收完毕 ");

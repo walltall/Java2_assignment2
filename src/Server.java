@@ -122,7 +122,7 @@ class ClientHandler implements Runnable {
                 while(true){
                     String response=in.readUTF();
                     if(response.equals("__###accept###__")){
-                        Thread.sleep(100);
+                        Thread.sleep(50);
                         int bytesRead=reader.read(buffer);
                         if(bytesRead!=-1) {
                             out.writeUTF("__###content###__");
