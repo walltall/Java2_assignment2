@@ -1,5 +1,7 @@
 import java.io.*;
+import java.lang.reflect.Array;
 import java.net.*;
+import java.util.ArrayList;
 
 public class Server {
     public static void main(String[] args) {
@@ -47,6 +49,8 @@ class ClientHandler implements Runnable {
             }else if(command.equals("d")){
                 String aimPath=in.readUTF();
                 download(in, out,aimPath);
+            }else if(command.equals("before_d")){
+                before_download(in,out);
             }
 
             // 关闭连接
@@ -61,8 +65,9 @@ class ClientHandler implements Runnable {
         //与客户端建立起联系，并准备开始下载文件
         try {
             File file = new File(aimPath);
-            String localPath = "Storage/" + file.getName();
+            String localPath = "Storage" + file.getPath();
             File localFile = new File(localPath);
+            localFile.getParentFile().mkdirs();
             if (localFile.createNewFile()) {
                 out.writeUTF("__###ready###__");
                 long bytesAmount =Long.parseLong(in.readUTF());
@@ -107,7 +112,7 @@ class ClientHandler implements Runnable {
     void download(DataInputStream in ,DataOutputStream out, String aimPath){
         try {
             File file=new File(aimPath);
-            String localPath = "Storage/" + file.getName();
+            String localPath = "Storage" + file.getPath();
             File localFile = new File(localPath);
             if(localFile.exists()){
                 out.writeUTF("__###exist###__");
@@ -117,7 +122,7 @@ class ClientHandler implements Runnable {
                 while(true){
                     String response=in.readUTF();
                     if(response.equals("__###accept###__")){
-                        Thread.sleep(2);
+                        Thread.sleep(100);
                         int bytesRead=reader.read(buffer);
                         if(bytesRead!=-1) {
                             out.writeUTF("__###content###__");
@@ -145,6 +150,23 @@ class ClientHandler implements Runnable {
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
+    }
+    void before_download(DataInputStream in ,DataOutputStream out) throws IOException {
+        String line=in.readUTF();
+        int num=Integer.parseInt(line);
+        ArrayList<String>path=new ArrayList<>();
+        for(int i=0;i<num;i++){
+            path.add("Storage\\"+in.readUTF());
+        }
+        ArrayList<String>localPath=new ArrayList<>();
+        ArrayList<String>storePath=new ArrayList<>();
+        for(int i=0;i<path.size();i++){
+            Toolbox.checkDir(path.get(i),null,localPath,storePath);
+        }
+        for(int i=0;i<storePath.size();i++){
+            out.writeUTF(storePath.get(i));
+        }
+        out.writeUTF("__###finish###__");
     }
 
 

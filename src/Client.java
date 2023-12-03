@@ -19,13 +19,14 @@ public class Client {
             System.out.println("请输入您想要上传的文件地址，并在输入完后输入<");
             String path;
             ArrayList<String>filePaths=new ArrayList<>();
+            ArrayList<String>storeFilesPaths=new ArrayList<>();
             while(!(path=sc.next()).equals("<")){
-                Toolbox.checkDir(path,filePaths);
+                Toolbox.checkDir(path,null,filePaths,storeFilesPaths);
             }
             ExecutorService executorService=Executors.newFixedThreadPool(filePaths.size());
             for(int i=0;i<filePaths.size();i++){
                 path_id.put(filePaths.get(i),i);
-                ConnectServer connectServer=new ConnectServer("localhost",8000,filePaths.get(i),"u");
+                ConnectServer connectServer=new ConnectServer("localhost",8000,filePaths.get(i),storeFilesPaths.get(i),"u");
                 ConnectServerList.add(connectServer);
                 executorService.execute(connectServer);
             }
@@ -37,10 +38,12 @@ public class Client {
             while(!(path=sc.next()).equals("<")){
                 fileName.add(path);
             }
+            PrepareDownloadFolder prepareDownloadFolder=new PrepareDownloadFolder("localhost",8000);
+            fileName=prepareDownloadFolder.work(fileName);
             ExecutorService executorService=Executors.newFixedThreadPool(fileName.size());
             for(int i=0;i<fileName.size();i++){
                 path_id.put(fileName.get(i),i);
-                ConnectServer connectServer=new ConnectServer("localhost",8000,fileName.get(i),"d");
+                ConnectServer connectServer=new ConnectServer("localhost",8000,fileName.get(i),"","d");
                 ConnectServerList.add(connectServer);
                 executorService.execute(connectServer);
             }
@@ -62,14 +65,21 @@ public class Client {
             }
         }
     }
-    static void waitProgress(ArrayList<ConnectServer>ConnectServerList,HashMap<String,Integer>path_id,Scanner sc){
-        ArrayList<String>waitList=new ArrayList<>();
-        String aimFile;
-        while(!(aimFile=sc.next()).equals("<")){
-            waitList.add(aimFile);
-        }
-        for(int i=0;i<waitList.size();i++){
-            ConnectServerList.get(path_id.get(waitList.get(i))).setStatus(Status.Wait);
+    static void waitProgress(ArrayList<ConnectServer>ConnectServerList,HashMap<String,Integer>path_id,Scanner sc,
+    boolean isAll){
+        if(!isAll) {
+            ArrayList<String> waitList = new ArrayList<>();
+            String aimFile;
+            while (!(aimFile = sc.next()).equals("<")) {
+                waitList.add(aimFile);
+            }
+            for (int i = 0; i < waitList.size(); i++) {
+                ConnectServerList.get(path_id.get(waitList.get(i))).setStatus(Status.Wait);
+            }
+        }else {
+            for(int i=0;i<ConnectServerList.size();i++){
+                ConnectServerList.get(i).setStatus(Status.Wait);
+            }
         }
     }
     static void activateProgress(ArrayList<ConnectServer>ConnectServerList,HashMap<String,Integer>path_id,Scanner sc){
@@ -103,14 +113,18 @@ public class Client {
                 if(connectServerList.get(i).getStatus()==Status.Finish|| connectServerList.get(i).getStatus()==Status.Delete)cnt++;
                 if(cnt==filePaths.size())break StatusMonitor;
             }
-            System.out.println("检查执行状态请输入c,暂停文件下载请输入w,恢复暂停下载的请输入a,删除下载任务请输入de");
+            System.out.println("检查执行状态请输入c,暂停部分文件下载请输入w,暂停全部文件下载请输入wa,\n恢复暂停下载的请输入a,删除下载任务请输入de");
             command=sc.next();
             if(command.equals("c")){
                 reportProgress(connectServerList);
             }
             if(command.equals("w")){
                 System.out.println("请输入想要暂停传输的文件，并在输入结束后输入<");
-                waitProgress(connectServerList,path_id,sc);
+                waitProgress(connectServerList,path_id,sc,false);
+            }
+            if(command.equals("wa")){
+                System.out.println("暂停所有文件的传输");
+                waitProgress(connectServerList,path_id,sc,true);
             }
             if(command.equals("a")){
                 System.out.println("请输入想要恢复传输的文件，并在输入结束后输入<");
@@ -129,13 +143,14 @@ class ConnectServer implements Runnable{
     private final DataInputStream in;
     private final DataOutputStream out;
     private final String aimPath;
+    private final String storePath;
     private final String command;
-//    private volatile int status=-1;//0正在进行,1报告一次进度,2暂停,3已完成,4终止任务
     private volatile Status status;
     private volatile Status prev_status;
-    public ConnectServer(String host,int port, String aimPath,String command) throws IOException {
+    public ConnectServer(String host,int port, String aimPath,String storePath,String command) throws IOException {
         Socket socket = new Socket(host, port);
         this.aimPath=aimPath;
+        this.storePath=storePath;
         this.command=command;
         this.in=new DataInputStream(socket.getInputStream());
         this.out=new DataOutputStream(socket.getOutputStream());
@@ -171,7 +186,7 @@ class ConnectServer implements Runnable{
     }
     void upload() throws IOException, InterruptedException {
         out.writeUTF("u");
-        out.writeUTF(aimPath);
+        out.writeUTF(storePath);
         String infoFromServer=in.readUTF();
         if(infoFromServer.equals("__###ready###__")){
             File file=new File(aimPath);
@@ -219,7 +234,7 @@ class ConnectServer implements Runnable{
         }
 
     }
-    void download() throws IOException{
+    void download() throws IOException, InterruptedException {
         out.writeUTF("d");
         out.writeUTF(aimPath);
         String infoFromServer=in.readUTF();
@@ -227,12 +242,14 @@ class ConnectServer implements Runnable{
             out.writeUTF("__###accept###__");
             long bytesAmount=Long.parseLong(in.readUTF());
             long bytesCount=0;
-            File file=new File("localStorage/"+aimPath);
+            File file=new File("localStorage"+aimPath);
+            file.getParentFile().mkdirs();
             BufferedOutputStream writer=new BufferedOutputStream(new FileOutputStream(file));
             byte[]buffer=new byte[2048];
             while(true) {
                 if(status==Status.Transfom){
                     infoFromServer= in.readUTF();
+                    Thread.sleep(200);
                     if(infoFromServer.equals("__###finish###__")){
                         status=Status.Finish;
                         System.out.println(aimPath+"文件已接收完毕 ");
@@ -267,7 +284,29 @@ class ConnectServer implements Runnable{
             System.out.println("接收到了意料之外的信息");
         }
     }
-
-
-
+}
+class PrepareDownloadFolder {
+    private DataInputStream reader;
+    private DataOutputStream writer;
+    public PrepareDownloadFolder(String host,int port) throws IOException{
+         Socket socket=new Socket(host,port);
+         DataInputStream reader=new DataInputStream(socket.getInputStream());
+         DataOutputStream writer=new DataOutputStream(socket.getOutputStream());
+         this.reader=reader;
+         this.writer=writer;
+    }
+    public ArrayList<String> work(ArrayList<String>aimPath) throws IOException{
+        int num=aimPath.size();
+        writer.writeUTF("before_d");
+        writer.writeUTF(String.valueOf(num));
+        for(int i=0;i<num;i++){
+            writer.writeUTF(aimPath.get(i));
+        }
+        ArrayList<String>res=new ArrayList<>();
+        String line;
+        while(!(line= reader.readUTF()).equals("__###finish###__")){
+            res.add(line);
+        }
+        return res;
+    }
 }

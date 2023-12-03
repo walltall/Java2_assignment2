@@ -20,17 +20,22 @@ public class Toolbox {
     }
 
 
-    static void checkDir(String path, ArrayList<String> LocalFilesPath){
-        File file=new File(path);
-        if(file.exists()&&file.isDirectory()){
-            File[]fileArray=file.listFiles();
+    static void checkDir(String path, String basePath, ArrayList<String> localFilesPath, ArrayList<String> storeFilesPath) {
+        File file = new File(path);
+        if (basePath == null || basePath.isEmpty()) {
+            basePath = file.getParent(); // 获取文件夹的父路径作为基础路径
+        }
+
+        if (file.exists() && file.isDirectory()) {
+            File[] fileArray = file.listFiles();
             if (fileArray != null) {
                 for (File value : fileArray) {
-                    checkDir(value.getPath(), LocalFilesPath);
+                    checkDir(value.getPath(), basePath, localFilesPath, storeFilesPath);
                 }
             }
-        }else {
-            LocalFilesPath.add(path);
+        } else {
+            localFilesPath.add(file.getPath());
+            storeFilesPath.add(file.getPath().replace(basePath, "")); // 将相对路径存入storeFilesPath
         }
     }
 }
