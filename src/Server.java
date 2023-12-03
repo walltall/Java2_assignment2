@@ -34,21 +34,19 @@ class ClientHandler implements Runnable {
     public void run() {
         try {
             // 获取输入流，用于接收客户端发送的数据
-            BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+            DataInputStream in = new DataInputStream(clientSocket.getInputStream());
 
             // 获取输出流，用于向客户端发送数据
-            PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
+            DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream());
 
             // 读取客户端发送的命令
-            String command=in.readLine();
+            String command=in.readUTF();
             if(command.equals("u")){
-                String aimPath=in.readLine();
+                String aimPath=in.readUTF();
                 upload(in,out,aimPath);
             }else if(command.equals("d")){
-                String aimPath=in.readLine();
+                String aimPath=in.readUTF();
                 download(in, out,aimPath);
-            }else {
-
             }
 
             // 关闭连接
@@ -59,24 +57,25 @@ class ClientHandler implements Runnable {
             e.printStackTrace();
         }
     }
-    void upload(BufferedReader in ,PrintWriter out,String aimPath){
+    void upload(DataInputStream in ,DataOutputStream out,String aimPath){
         //与客户端建立起联系，并准备开始下载文件
         try {
             File file = new File(aimPath);
             String localPath = "Storage/" + file.getName();
             File localFile = new File(localPath);
             if (localFile.createNewFile()) {
-                out.println("__###ready###__");
-                long bytesAmount =Long.parseLong(in.readLine());
+                out.writeUTF("__###ready###__");
+                long bytesAmount =Long.parseLong(in.readUTF());
                 long bytesCount=0;
-                BufferedWriter writer = new BufferedWriter(new FileWriter(localFile));
+                byte[]buffer=new byte[2048];
+                BufferedOutputStream writer = new BufferedOutputStream(new FileOutputStream(localFile));
                 while (true){
-                    String inputLine=in.readLine();
+                    String inputLine=in.readUTF();
                     if(inputLine.equals("__###finish###__")){
                         break;
                     }else if(inputLine.equals("__###check###__")) {
                         System.out.println(Toolbox.calculateProgress(aimPath, bytesCount, bytesAmount));
-                        out.println(Toolbox.calculateProgress(aimPath, bytesCount, bytesAmount));
+                        out.writeUTF(Toolbox.calculateProgress(aimPath, bytesCount, bytesAmount));
                     }else if(inputLine.equals("__###wait###__")) {
                         //此状态维持空体就行
                         continue;
@@ -85,15 +84,19 @@ class ClientHandler implements Runnable {
                         localFile.delete();
                         System.out.println(aimPath+"文件的传输已取消");
                         return;
-                    }else {
-                        bytesCount+=inputLine.getBytes().length;
-                        writer.write(inputLine + "\n");
+                    }else if (inputLine.equals("__###content###__")){
+                        int bytesRead=in.read(buffer);
+                        bytesCount+=bytesRead;
+                        if(bytesRead==-1){
+                            break;
+                        }
+                        writer.write(buffer,0,bytesRead);
                     }
                 }
                 writer.close();
                 System.out.println(aimPath+"文件已接收完毕");
             }else {
-                out.println("__###exist###__");
+                out.writeUTF("__###exist###__");
                 System.out.println(aimPath+"文件已存在于服务器中");
             }
         }catch (IOException e){
@@ -101,22 +104,24 @@ class ClientHandler implements Runnable {
         }
     }
 
-    void download(BufferedReader in ,PrintWriter out, String aimPath){
+    void download(DataInputStream in ,DataOutputStream out, String aimPath){
         try {
             File file=new File(aimPath);
             String localPath = "Storage/" + file.getName();
             File localFile = new File(localPath);
             if(localFile.exists()){
-                out.println("__###exist###__");
-                out.println(Toolbox.countBytes(localFile));//告知客户端将下载的文件的大小
-                BufferedReader reader=new BufferedReader(new FileReader(localFile));
+                out.writeUTF("__###exist###__");
+                out.writeUTF(String.valueOf(Toolbox.countBytes(localFile)));//告知客户端将下载的文件的大小
+                BufferedInputStream reader=new BufferedInputStream(new FileInputStream(localFile));
+                byte[]buffer=new byte[2048];
                 while(true){
-                    String response=in.readLine();
+                    String response=in.readUTF();
                     if(response.equals("__###accept###__")){
                         Thread.sleep(2);
-                        String line=reader.readLine();
-                        if(line!=null) {
-                            out.println(line);
+                        int bytesRead=reader.read(buffer);
+                        if(bytesRead!=-1) {
+                            out.writeUTF("__###content###__");
+                            out.write(buffer,0,bytesRead);
                         }else {
                             break;
                         }
@@ -128,11 +133,11 @@ class ClientHandler implements Runnable {
                         return;
                     }
                 }
-                out.println("__###finish###__");
+                out.writeUTF("__###finish###__");
                 System.out.println(aimPath+"文件已传输完毕");
                 reader.close();
             }else {
-                out.println("__###None###__");
+                out.writeUTF("__###None###__");
                 System.out.println(aimPath+"文件不存在");
             }
         }catch (IOException e){

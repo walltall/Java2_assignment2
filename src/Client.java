@@ -3,7 +3,6 @@ import java.net.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Scanner;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -139,8 +138,8 @@ public class Client {
 
 }
 class ConnectServer implements Runnable{
-    private final BufferedReader in;
-    private final BufferedWriter out;
+    private final DataInputStream in;
+    private final DataOutputStream out;
     private final String aimPath;
     private final String command;
 //    private volatile int status=-1;//0正在进行,1报告一次进度,2暂停,3已完成,4终止任务
@@ -150,8 +149,8 @@ class ConnectServer implements Runnable{
         Socket socket = new Socket(host, port);
         this.aimPath=aimPath;
         this.command=command;
-        this.in=new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        this.out=new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+        this.in=new DataInputStream(socket.getInputStream());
+        this.out=new DataOutputStream(socket.getOutputStream());
 
     }
 
@@ -183,46 +182,48 @@ class ConnectServer implements Runnable{
 
     }
     void upload() throws IOException, InterruptedException {
-        out.println("u");
-        out.println(aimPath);
-        String infoFromServer=in.readLine();
+        out.writeUTF("u");
+        out.writeUTF(aimPath);
+        String infoFromServer=in.readUTF();
         if(infoFromServer.equals("__###ready###__")){
             File file=new File(aimPath);
-            BufferedReader bufferedReader=new BufferedReader(new FileReader(file));
+            byte[]fileData=new byte[2048];
+            BufferedInputStream buffered =new BufferedInputStream(new FileInputStream(file));
             //首先统计文本内的byte数目并告知服务端
             long byteCount= Toolbox.countBytes(file);
-            out.println(byteCount);
+            out.writeUTF(String.valueOf(byteCount));
             String line;
             while(true){
                 if(status==Status.Transfom) {
                     Thread.sleep(2);
-                    line = bufferedReader.readLine();
-                    if(line!=null) {
-                        out.println(line);
+                    int bytesRead=buffered.read(fileData);
+                    if(bytesRead!=-1) {
+                        out.writeUTF("__###content###__");
+                        out.write(fileData,0,bytesRead);
                     }else {
                         status=Status.Finish;
-                        out.println("__###finish###__");
+                        out.writeUTF("__###finish###__");
                         System.out.println(aimPath+"文件已上传完成");
                         break;
                     }
                 }else if(status==Status.Report){
-                    out.println("__###check###__");
-                    String temp=in.readLine();
+                    out.writeUTF("__###check###__");
+                    String temp=in.readUTF();
                     while (temp.equals("")){
-                        temp=in.readLine();
+                        temp=in.readUTF();
                     }
                     System.out.println(temp + this.prev_status);
                     status=this.prev_status;
                 }else if(status==Status.Wait){
                     //持续告知服务端保持暂停状态,避免服务端因暂停超时而终止服务
-                    out.println("__###wait###__");
+                    out.writeUTF("__###wait###__");
 
                 }else if (status==Status.Delete){
-                    out.println("__###delete###__");
+                    out.writeUTF("__###delete###__");
                     break;
                 }
             }
-            bufferedReader.close();
+            buffered.close();
         }else if(infoFromServer.equals("__###exist###__")){
             System.out.println(aimPath+"已经在服务器上存在了");
         }else {
@@ -231,36 +232,40 @@ class ConnectServer implements Runnable{
 
     }
     void download() throws IOException{
-        out.println("d");
-        out.println(aimPath);
-        out.println("__###accept###__");
-        String infoFromServer=in.readLine();
+        out.writeUTF("d");
+        out.writeUTF(aimPath);
+        String infoFromServer=in.readUTF();
         if(infoFromServer.equals("__###exist###__")){
-            long bytesAmount=Long.parseLong(in.readLine());
+            out.writeUTF("__###accept###__");
+            long bytesAmount=Long.parseLong(in.readUTF());
             long bytesCount=0;
             File file=new File("localStorage/"+aimPath);
-            BufferedWriter writer=new BufferedWriter(new FileWriter(file));
+            BufferedOutputStream writer=new BufferedOutputStream(new FileOutputStream(file));
+            byte[]buffer=new byte[2048];
             while(true) {
                 if(status==Status.Transfom){
-                    infoFromServer= in.readLine();
-                    if(!infoFromServer.equals("__###finish###__")){
-                        out.println("__###accept###__");
-                        writer.write(infoFromServer);
-                        writer.write("\n");
-                        bytesCount+=infoFromServer.getBytes().length;
-                    }else{
+                    infoFromServer= in.readUTF();
+                    if(infoFromServer.equals("__###finish###__")){
                         status=Status.Finish;
                         System.out.println(aimPath+"文件已接收完毕 ");
                         writer.close();
                         break;
+
+                    }else if(infoFromServer.equals("__###content###__")){
+                        out.writeUTF("__###accept###__");
+                        int bytesRead=in.read(buffer);
+                        if(bytesRead!=-1) {
+                            writer.write(buffer,0,bytesRead);
+                            bytesCount += infoFromServer.getBytes().length;
+                        }
                     }
                 }else if(status==Status.Report){
                     System.out.println(Toolbox.calculateProgress(aimPath,bytesCount,bytesAmount) + this.prev_status);
                     status=this.prev_status;
                 }else if(status==Status.Wait){
-                    out.println("__###wait###__");
+                    out.writeUTF("__###wait###__");
                 }else if(status==Status.Delete){
-                    out.println("__###delete###__");
+                    out.writeUTF("__###delete###__");
                     System.out.println(aimPath+"文件的传输已取消");
                     writer.close();
                     file.delete();
