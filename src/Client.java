@@ -20,7 +20,7 @@ public class Client {
             String path;
             ArrayList<String>filePaths=new ArrayList<>();
             while(!(path=sc.next()).equals("<")){
-                checkDir(path,filePaths);
+                Toolbox.checkDir(path,filePaths);
             }
             ExecutorService executorService=Executors.newFixedThreadPool(filePaths.size());
             for(int i=0;i<filePaths.size();i++){
@@ -53,19 +53,7 @@ public class Client {
     }
 
 
-    static void checkDir(String path,ArrayList<String>filesPath){
-        File file=new File(path);
-        if(file.exists()&&file.isDirectory()){
-            File[]fileArray=file.listFiles();
-            if (fileArray != null) {
-                for (File value : fileArray) {
-                    checkDir(value.getPath(), filesPath);
-                }
-            }
-        }else {
-            filesPath.add(path);
-        }
-    }
+
 
     static void reportProgress(ArrayList<ConnectServer>ConnectServerList){
         for (ConnectServer connectServer : ConnectServerList) {
