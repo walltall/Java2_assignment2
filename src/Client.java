@@ -318,9 +318,10 @@ class PrepareDownloadFolder {
          this.reader=reader;
          this.writer=writer;
     }
-    public ArrayList<String> work(ArrayList<String>aimPath) throws IOException{
+    public ArrayList<String> work(ArrayList<String>aimPath) throws IOException, InterruptedException {
         int num=aimPath.size();
         writer.writeUTF("before_d");
+        Thread.sleep(2);
         writer.writeUTF(String.valueOf(num));
         for(int i=0;i<num;i++){
             writer.writeUTF(aimPath.get(i));
